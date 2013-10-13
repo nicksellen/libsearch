@@ -37,12 +37,12 @@
                             (:repo h)
                             (str (:repo h) ".gemspec") opts)) "")))))
 
-(defn extract-ruby-gemspec [h]
+(defn extract-ruby-libs [h]
   (cond (uses-ruby? h)
-        (assoc h :ruby-libs
-               (set (concat
-                  (extract-libs-from-gemspec h)
-                  (extract-libs-from-gemfile h))))
+        (assoc h :libs
+               (set (map (partial str "ruby/") (concat
+                       (extract-libs-from-gemspec h)
+                       (extract-libs-from-gemfile h)))))
         :else h))
 
 (defn keep-useful-keys [h]
@@ -51,41 +51,57 @@
                   :user
                   :created_at
                   :updated_at
+                  :pushed_at
+                  :watchers_count
+                  :forks_count
                   :repo
-                  :ruby-libs]))
+                  :libs]))
 
 (defn process-repo [h]
   (println ".")
   ((comp
-    extract-ruby-gemspec
+    extract-ruby-libs
     extract-langs
     extract-name-and-repo) h))
 
-(defn fetch-dates [h]
+(defn fetch-github-repo-data [h]
   (merge h (select-keys
             (repos/specific-repo (:user h) (:repo h))
-            [:created_at :updated_at])))
+            [:created_at
+             :updated_at
+             :pushed_at
+             :watchers_count
+             :forks_count])))
 
 (defn parse-dates [h]
   (apply assoc h
          (mapcat
-          #(list % (coerce/to-long (h %)))
-          [:created_at :updated_at])))
+          #(list % (coerce/to-date (h %)))
+          [:created_at :updated_at :pushed_at])))
 
-(defn add-ruby-libs-to-db [h]
-  (map #(db/add-lib % "Ruby" (str (:user h) "/" (:repo h))) (:ruby-libs h)))
+(defn add-repo-to-db [h]
+  (apply db/add-repo (concat [(str (:user h) "/" (:repo h))
+                              (:created_at h)
+                              (:pushed_at h)
+                              (:watchers_count h)
+                              (:forks_count h)]
+                             (:libs h)))
+  h)
+
+(defn add-libs-to-db [h]
+  (map #(db/add-lib %) (:libs h)))
 
 (defn post-process-repo [h]
   (println (str "processing " (:full_name h)))
   ((comp
-    add-ruby-libs-to-db
+    add-libs-to-db
+    add-repo-to-db
     keep-useful-keys
     parse-dates
-    fetch-dates) h))
+    fetch-github-repo-data) h))
 
 (defn repo-filter [h]
-  (and (contains? (:langs h) :Ruby)
-       (not-empty (:ruby-libs h))))
+  (not-empty (:libs h)))
 
 (defn fetch-repos [n since]
   (map post-process-repo
@@ -94,10 +110,17 @@
         (map process-repo
              (take n (repos/all-repos (assoc opts :since since)))))))
 
+(defn list2 []
+  (doseq [item (db/list-repos-with-libs)]
+    (println (:repo item) " " (:meta item))
+    (doseq [lib (:libs item)]
+      (println "  " lib))
+    (println)))
+
 (defn list []
-  (doseq [item (db/query)]
-    (println (:lib/name item))
-    (doseq [repo (:lib/repo item)]
+  (doseq [item (db/list-libs-with-repos)]
+    (println (:lib item))
+    (doseq [repo (:repos item)]
       (println "  " repo))
     (println)))
 

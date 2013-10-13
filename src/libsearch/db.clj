@@ -17,14 +17,6 @@
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id [:db.part/db]
-  :db/ident :lib/language
-  :db/valueType :db.type/keyword
-  :db/cardinality :db.cardinality/one
-  :db/fulltext true
-  :db/doc "language for a library"
-  :db.install/_attribute :db.part/db}
-
- {:db/id #db/id [:db.part/db]
   :db/ident :lib/repo
   :db/valueType :db.type/ref
   :db/cardinality :db.cardinality/many
@@ -59,6 +51,22 @@
   :db/doc "repo last updated date"
   :db.install/_attribute :db.part/db}
 
+ {:db/id #db/id [:db.part/db]
+  :db/ident :repo/watchers-count
+  :db/valueType :db.type/long
+  :db/cardinality :db.cardinality/one
+  :db/fulltext false
+  :db/doc "how many watchers"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id [:db.part/db]
+  :db/ident :repo/forks-count
+  :db/valueType :db.type/long
+  :db/cardinality :db.cardinality/one
+  :db/fulltext false
+  :db/doc "how many forks"
+  :db.install/_attribute :db.part/db}
+
 ])
 
 (defn create-db [] (d/create-database uri))
@@ -70,24 +78,33 @@
 (defn load-schema []
   (d/transact (d/connect uri) schema))
 
-(defn add-lib [name language & repo-names]
+(defn add-lib [name & repo-names]
+  (println (str "adding lib [" name "] and repos " repo-names))
   (let [repos (map
                #(into {} [[:repo/fullname %] [:db/id (d/tempid :db.part/user)]])
                repo-names)]
     @(d/transact conn (conj repos {
                                :lib/name name,
-                               :lib/language language,
                                :lib/repo (map :db/id repos),
                                :db/id (d/tempid :db.part/user)}))))
 
-(defn add-repo [name & lib-names]
-  (let [libs (map
-              #(into {} [[:lib/name %] [:db/id (d/tempid :db.part/user)]])
+(defn add-repo [name created updated watchers forks & lib-names]
+  (println
+   (str "adding repo [" name "] with libs " lib-names " and created/updated " created "/" updated ))
+  (let [repo-id (d/tempid :db.part/user)
+        libs (map
+              #(into {} [[:lib/name %]
+                         [:lib/repo repo-id]
+                         [:db/id (d/tempid :db.part/user)]])
               lib-names)]
     @(d/transact conn (conj
                        libs
                        {:repo/fullname name
-                        :db/id (d/tempid :db.part/user)}))))
+                        :repo/created-at created
+                        :repo/updated-at updated
+                        :repo/watchers-count watchers
+                        :repo/forks-count forks
+                        :db/id repo-id}))))
 
 (defn list-repos []
   (map first (d/q '[:find ?n :where [_ :repo/fullname ?n]] (db conn))))
@@ -104,12 +121,10 @@
   (seq
    (d/q '[:find ?libname ?reponame
           :where
-          [_ :lib/name ?libname]
-          [_ :lib/repo ?r]
+          [?i :lib/name ?libname]
+          [?i :lib/repo ?r]
           [?r :repo/fullname ?reponame]]
         (db conn))))
-
-;(d/q '[:find ?reponame ?libname :where [?repo-id :repo/fullname ?reponame] [?lib-id :lib/repo ?repo-id] [?lib-id :lib/name ?libname]] (db conn))
 
 (defn query-repos-with-libs []
   (seq
