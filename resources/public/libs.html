@@ -1,0 +1,13 @@
+<div>
+  <ul class="list-unstyled">
+    <li ng-repeat="lib in libs" class="lib lang-{{ lib.lang }}">
+      <span class="lang">{{ lib.lang }}</span>
+      <span class="name">{{ lib.name }}</span>
+      <ul class="list-unstyled repos">
+        <li ng-repeat="repo in lib.repos">
+          {{ repo }}
+        </li>
+      </ul>
+    </li>
+  </ul>
+</div>

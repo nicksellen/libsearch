@@ -79,7 +79,7 @@
   (d/transact (d/connect uri) schema))
 
 (defn add-lib [name & repo-names]
-  (println (str "adding lib [" name "] and repos " repo-names))
+  (comment println (str "adding lib [" name "] and repos " repo-names))
   (let [repos (map
                #(into {} [[:repo/fullname %] [:db/id (d/tempid :db.part/user)]])
                repo-names)]
@@ -89,7 +89,7 @@
                                :db/id (d/tempid :db.part/user)}))))
 
 (defn add-repo [name created updated watchers forks & lib-names]
-  (println
+  (comment println
    (str "adding repo [" name "] with libs " lib-names " and created/updated " created "/" updated ))
   (let [repo-id (d/tempid :db.part/user)
         libs (map

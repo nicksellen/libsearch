@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html ng-app="libsearch">
+  <head>
+    <script src="/js/angular-1.2.0-rc.3/angular.js"></script>
+    <script src="/js/angular-1.2.0-rc.3/angular-route.js"></script>
+    <script src="/js/angular-1.2.0-rc.3/angular-resource.js"></script>
+    <script src="/js/cljs.js"></script>
+    <script src="/js/app.js"></script>
+
+    <link rel="stylesheet" href="/bootstrap-3.0.0/css/bootstrap.min.css"></link>
+
+    <link href='http://fonts.googleapis.com/css?family=Inconsolata:400,700' rel='stylesheet' type='text/css'>
+    <style type="text/css">
+
+      body {
+        font-size: 16px;
+        font-family: 'Inconsolata', sans-serif;
+        line-height: 26px;
+      }
+
+      .lang-ruby .lang {
+        color: #fcc;
+      }
+
+      .lang-clojure .lang {
+        color: #afa;
+      }
+
+      .lib .name {
+        font-weight: bold;
+      }
+
+      .lib .name,
+      .lib .lang {
+        font-size: 36px;
+      }
+
+      .lib .lang {
+        padding-right: 10px;
+      }
+
+      .lib ul.repos {
+        margin-left: 20px;
+        margin-top: 10px;
+        margin-bottom: 30px;
+      }
+
+      nav.navbar {
+        background-color: #ffffff;
+      }
+
+      .navbar-brand {
+        font-weight: bold;
+      }
+
+    </style>
+  </head>
+  <body>
+    <nav class="navbar navbar-default" role="navigation">
+      <div class="container">
+        <div class="navbar-header">
+          <span class="navbar-brand">libsearch</span>
+        </div>
+        <div class="collapse navbar-collapse navbar-ex1-collapse" nav-menu="active">
+          <ul class="nav navbar-nav">
+            <li><a href="#/libs">libs</a></li>
+            <li><a href="#/repos">repos</a></li>
+          </ul>
+          <ul class="nav navbar-nav pull-right">
+            <li class="pull-right"><a href="#/about">about</a></li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+    <div class="container">
+      <div ng-view></div>
+    </div>
+  </body>
+</html>
