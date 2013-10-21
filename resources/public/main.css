@@ -1,0 +1,44 @@
+body {
+  font-size: 16px;
+  font-family: 'Inconsolata', sans-serif;
+  line-height: 26px;
+  padding-top: 80px;
+}
+
+.lang-ruby .lang {
+  color: #fcc;
+}
+
+.lang-clojure .lang {
+  color: #afa;
+}
+
+.libs > .lib > .name,
+.repos > .repo > .name {
+  font-weight: bold;
+}
+
+.libs > .lib > .name,
+.libs > .lib > .lang,
+.repos > .repo > .name{
+  font-size: 36px;
+}
+
+.lib .lang {
+  padding-right: 10px;
+}
+
+.lib ul.repos,
+.repo ul.libs {
+  margin-left: 20px;
+  margin-top: 10px;
+  margin-bottom: 30px;
+}
+
+nav.navbar {
+  background-color: #ffffff;
+}
+
+.navbar-brand {
+  font-weight: bold;
+}

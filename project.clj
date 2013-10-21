@@ -1,6 +1,6 @@
-(defproject libsearch "0.1.0-SNAPSHOT"
-  :description "FIXME: write description"
-  :url "http://example.com/FIXME"
+(defproject libsearch "0.1.1-SNAPSHOT"
+  :description "data about and clojure libraries from github"
+  :url "http://github.com/nicksellen/libsearch"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :plugins [[lein-cljsbuild "0.3.4"]]
@@ -12,7 +12,8 @@
                  [org.clojure/data.json "0.2.3"]
                  [com.datomic/datomic-free "0.8.4218"]
                  [tentacles "0.2.5"]]
-  :hooks [leiningen.cljsbuild]
+  :main libsearch.cli
+  ;:hooks [leiningen.cljsbuild]
   :source-paths ["src/clj"]
   :cljsbuild {
     :builds {

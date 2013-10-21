@@ -17,12 +17,25 @@
   (map #(apply assoc % (interleave [:lang :name] (clojure.string/split (:lib %) #"\/" 2))) libs))
 
 (defn process-repos [repos]
-  repos)
+  (map #(assoc %
+          :created (str (:created %))
+          :updated (str (:updated %))
+          :libs (map (fn [name] (apply assoc
+                                      {}
+                                      (interleave [:lang :name]
+                                                  (clojure.string/split name #"\/" 2))))
+                     (:libs %)))
+       repos))
+
+(defn load-libs []
+  (process-libs (db/libs 60 0 (db/watchers > 1))))
+
+(defn load-repos []
+  (process-repos (db/repos 60 0 (db/watchers > 1))))
 
 (defroutes app-routes
-  (GET "/libs" [] (json (process-libs (db/list-libs-with-repos))))
-  (GET "/repos" [] (json (process-repos (db/list-repos-with-libs)))))
-
+  (GET "/libs" [] (json (load-libs)))
+  (GET "/repos" [] (json (load-repos))))
 
 (def handler
   (-> app-routes

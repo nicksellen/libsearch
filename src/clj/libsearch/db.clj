@@ -1,5 +1,6 @@
 (ns libsearch.db
-  (:use [datomic.api :only [db q] :as d]))
+  (:use [datomic.api :only [db q] :as d])
+  (:require [clj-time.coerce :as coerce]))
 
 (def uri "datomic:free://localhost:4334/lib")
 
@@ -117,30 +118,91 @@
        (q '[:find ?n :where [?n :lib/name]]
           (db conn))))
 
-(defn query-libs-with-repos []
-  (seq
-   (d/q '[:find ?libname ?reponame
-          :where
-          [?i :lib/name ?libname]
-          [?i :lib/repo ?r]
-          [?r :repo/fullname ?reponame]]
-        (db conn))))
+(defn p [v]
+  ;(prn v)
+  v)
 
-(defn query-repos-with-libs []
-  (seq
-   (d/q '[:find ?reponame ?libname
-          :where
-          [?repo-id :repo/fullname ?reponame]
-          [?lib-id :lib/repo ?repo-id]
-          [?lib-id :lib/name ?libname]]
-        (db conn))))
+(defn lang [val]
+  [[(list '.startsWith '?libname (str val "/"))]])
 
-(defn query-result-to-data [r k v]
-  (map #(assoc {} k (ffirst %) v (map last %))
-       (partition-by first (sort-by first (r)))))
+(defn watchers [f val]
+  [['?repo :repo/watchers-count '?watchers] [(list f '?watchers val)]])
 
-(defn list-libs-with-repos []
-  (query-result-to-data query-libs-with-repos :lib :repos))
+(defn forks [f val]
+  [['?repo :repo/forks-count '?forks] [(list f '?forks val)]])
 
-(defn list-repos-with-libs []
-  (query-result-to-data query-repos-with-libs :repo :libs))
+;; these date ones aren't very good yet... I want to be able to
+;; pass the comparison fn into it and I don't know how to reference
+;; properly inside my inner function
+
+(defn created [f val]
+  [['?repo :repo/created-at '?created] [(list f '?created val)]])
+
+(defn created> [val]
+  (created #(> (coerce/to-long %1) %2) (coerce/to-long val)))
+
+(defn created< [val]
+  (created #(< (coerce/to-long %1) %2) (coerce/to-long val)))
+
+(defn updated [f val]
+  [['?repo :repo/updated-at '?updated] [(list f '?updated val)]])
+
+(defn mapize-results [ks results]
+  (map #(apply assoc {} (interleave ks (take (count ks) %))) results))
+
+(defn with-count-and-offset [count offset results]
+  (->> results
+       (drop offset)
+       (take count)))
+
+(defn query-with-rules [query rules]
+  (sort #(> (first %1) (first %2))
+          (d/q (p (update-in query [:where] concat (filter seq (apply concat rules))))
+               (db conn))))
+
+(defn query-libs-with-repos [& rules]
+  (query-with-rules {:find ['(count ?repowatchers)
+                            '?libname
+                            '(distinct ?reponame)]
+                     :in ['$]
+                     :where [['?lib :lib/name '?libname]
+                             ['?lib :lib/repo '?repo]
+                             ['?repo :repo/fullname '?reponame]
+                             ['?repo :repo/watchers-count '?repowatchers]]}
+                    rules))
+
+(defn query-repos-with-libs [& rules]
+  (query-with-rules {:find ['?repowatchers
+                            '?reponame
+                            '(distinct ?libname)
+                            '?repowatchers
+                            '?repoforks
+                            '?created
+                            '?updated]
+                     :in ['$]
+                     :where [['?repo :repo/fullname '?reponame]
+                             ['?lib :lib/repo '?repo]
+                             ['?lib :lib/name '?libname]
+                             ['?repo :repo/watchers-count '?repowatchers]
+                             ['?repo :repo/forks-count '?repoforks]
+                             ['?repo :repo/created-at '?created]
+                             ['?repo :repo/updated-at '?updated]]}
+                    rules))
+
+(defn query-repos-with-libs-off []
+  (take 20 (d/q '[:find ?reponame ?libname
+           :where
+           [?repo-id :repo/fullname ?reponame]
+           [?lib-id :lib/repo ?repo-id]
+           [?lib-id :lib/name ?libname]]
+         (db conn))))
+
+(defn libs [count offset & rules]
+  (->> (apply query-libs-with-repos rules)
+       (with-count-and-offset count offset)
+       (mapize-results [:rank :lib :repos])))
+
+(defn repos [count offset & rules]
+  (->> (apply query-repos-with-libs rules)
+       (with-count-and-offset count offset)
+       (mapize-results [:rank :repo :libs :watchers :forks :created :updated])))

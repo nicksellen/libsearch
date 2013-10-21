@@ -1,11 +1,17 @@
-<h1>Repos</h1>
 <div>
-  <ul>
-    <li ng-repeat="repo in repos">
-      <span>{{ repo.repo }}</span>
-      <ul>
-        <li ng-repeat="lib in repo.libs">
-          {{ lib }}
+  <ul class="list-unstyled repos">
+    <li ng-repeat="repo in repos" class="repo">
+      <span class="name">{{ repo.repo }}</span>
+      <span class="meta" style="display: none;">
+        <span class="created">{{ repo.created }}</span>
+        <span class="updated">{{ repo.updated }}</span>
+        <span class="watchers">{{ repo.watchers }}</span>
+        <span class="forks">{{ repo.forks }}</span>
+      </span>
+      <ul class="list-unstyled libs">
+        <li ng-repeat="lib in repo.libs" class="lang-{{ lib.lang }}">
+          <span class="lang">{{ lib.lang }}</span>
+          <span class="name">{{ lib.name }}</span>
         </li>
       </ul>
     </li>

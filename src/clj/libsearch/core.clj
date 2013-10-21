@@ -4,9 +4,20 @@
   (:require [clj-time.core :as time])
   (:require [clj-time.coerce :as coerce])
   (:require [tentacles.core :as core])
+  (:require [clojure.stacktrace :as stacktrace])
   (:require [tentacles.repos :as repos]))
 
 (def opts {:auth (System/getenv "GHAUTH")})
+
+(def counter (atom 0))
+
+(defn counter-inc []
+  (swap! counter inc))
+
+(defn counter-reset []
+  (swap! counter (fn [_] 0)))
+
+(counter-reset)
 
 (defn extract-name-and-repo
   [h]
@@ -46,26 +57,27 @@
                                                   (extract-libs-from-gemfile h))))))
         :else h))
 
+(defn load-project-clj [user repo]
+  (String. (or (:content (repos/contents user repo "project.clj" opts)) "")))
+
+(defn parse-project-clj [content]
+  (cond (empty? content)
+        {}
+        :else
+        (apply assoc {} (drop 3 (read-string content)))))
+
 (defn extract-clojure-libs [h]
   (cond (uses-lang? :Clojure h)
         (assoc h :libs
                (concat (:libs h)
                        (map #(str "clojure/" (first %))
-                            (:dependencies (apply assoc
-                                                  {}
-                                                  (drop 3
-                                                        (read-string
-                                                         (String. (or (:content (repos/contents
-                                                                               (:user h)
-                                                                               (:repo h)
-                                                                               "project.clj"
-                                                                               opts))
-                                                                      "")))))))))
+                            (:dependencies (parse-project-clj (load-project-clj
+                                                               (:user h)
+                                                               (:repo h)))))))
         :else h))
 
 (defn keep-useful-keys [h]
-  (select-keys h [
-                  :langs
+  (select-keys h [:langs
                   :user
                   :created_at
                   :updated_at
@@ -76,9 +88,10 @@
                   :libs]))
 
 (defn print-preprocess-result [h]
-  (println (:full_name h) "\n"
+  (println @counter (:full_name h) "\n"
            " langs : " (seq (:langs h)) "\n"
            " libs  : " (seq (:libs h)) "\n")
+  (counter-inc)
   h)
 
 (defn add-empty-libs-set [h]
@@ -95,7 +108,7 @@
 
 (defn fetch-github-repo-data [h]
   (merge h (select-keys
-            (repos/specific-repo (:user h) (:repo h))
+            (repos/specific-repo (:user h) (:repo h) opts)
             [:created_at
              :updated_at
              :pushed_at
@@ -111,22 +124,36 @@
 (defn add-repo-to-db [h]
   (println "  adding repo to db " h "\n")
   (apply db/add-repo (concat [(str (:user h) "/" (:repo h))
-                              (get h :created_at -1)
-                              (get h :pushed_at -1)
-                              (get h :watchers_count -1)
-                              (get h :forks_count -1)]
+                              (:created_at h)
+                              (:pushed_at h)
+                              (:watchers_count h)
+                              (:forks_count h)]
                              (:libs h)))
   h)
+
+
+(defn add-some-defaults [h]
+  (merge h {:created_at -1,
+            :updated_at -1,
+            :pushed_at -1,
+            :watchers_count 0
+            :forks_count 0}))
 
 (defn add-libs-to-db [h]
   (map #(db/add-lib %) (:libs h)))
 
-(defn post-process-repo [h]
+(defn print-data [h]
+  (println "data: " h)
+  h)
+
+(defn postprocess-repo [h]
   (println "  selected!\n")
   (-> h
+      add-some-defaults
       fetch-github-repo-data
       parse-dates
       keep-useful-keys
+      print-data
       add-repo-to-db
       add-libs-to-db))
 
@@ -134,35 +161,10 @@
   (not-empty (:libs h)))
 
 (defn fetch-repos [n since]
-  (map post-process-repo
-       (filter
-        repo-filter
-        (map preprocess-repo
-             (take n (repos/all-repos (assoc opts :since since :all-pages true)))))))
-
-(defn list2 []
-  (doseq [item (db/list-repos-with-libs)]
-    (println (:repo item) " " (:meta item))
-    (doseq [lib (:libs item)]
-      (println "  " lib))
-    (println)))
-
-(defn list1 []
-  (doseq [item (db/list-libs-with-repos)]
-    (println (:lib item))
-    (doseq [repo (:repos item)]
-      (println "  " repo))
-    (println)))
-
-(defn printest []
-  (println "starting")
-  (map
-     #(do
-        (println %)
-        (Thread/sleep 1000)
-        (str "returned: " %))
-     ["hello" "nick" "li" "la"]))
-
-(pprint "nick")
-
-(printest)
+  (counter-reset)
+  (->> (repos/all-repos (assoc opts :since since :all-pages true))
+       (take n)
+       (filter seq)
+       (pmap preprocess-repo)
+       (filter repo-filter)
+       (pmap postprocess-repo)))
