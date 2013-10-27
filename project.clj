@@ -11,6 +11,7 @@
                  [compojure "1.1.5"]
                  [org.clojure/data.json "0.2.3"]
                  [com.datomic/datomic-free "0.8.4218"]
+                 [reply "0.2.1" :exclusions [ring/ring-core]]
                  [tentacles "0.2.5"]]
   :main libsearch.cli
   ;:hooks [leiningen.cljsbuild]

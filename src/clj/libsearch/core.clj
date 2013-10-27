@@ -7,7 +7,7 @@
   (:require [clojure.stacktrace :as stacktrace])
   (:require [tentacles.repos :as repos]))
 
-(def opts {:auth (System/getenv "GHAUTH")})
+(def opts (merge {:auth (System/getenv "GHAUTH")} {}))
 
 (def counter (atom 0))
 
@@ -19,13 +19,14 @@
 
 (counter-reset)
 
-(defn extract-name-and-repo
-  [h]
+(defn extract-name-and-repo [h]
   (apply assoc h (interleave [:user :repo] (.split (:full_name h) "/"))))
 
-(defn extract-langs
-  [h]
+(defn extract-langs [h]
   (assoc h :langs (set (keys (repos/languages (:user h) (:repo h) opts)))))
+
+(defn if-lang? [lang h f]
+  (cond (contains? (:langs h) lang) (f h) :else h))
 
 (defn uses-lang? [lang h]
   (contains? (:langs h) lang))
@@ -41,7 +42,7 @@
 
 (defn extract-libs-from-gemspec [h]
   (mapcat rest
-   (re-seq #"_dependency\(['\"]([a-zA-Z0-9_-]+)['\"]"
+   (re-seq #"_dependency[\ \(]['\"]([a-zA-Z0-9_-]+)['\"]"
            (String. (or (:content
                            (repos/contents
                             (:user h)
@@ -49,35 +50,30 @@
                             (str (:repo h) ".gemspec") opts)) "")))))
 
 (defn extract-ruby-libs [h]
-  (cond (uses-lang? :Ruby h)
-        (assoc h :libs
-               (concat (:libs h)
-                       (set (map (partial str "ruby/") (concat
-                                                  (extract-libs-from-gemspec h)
-                                                  (extract-libs-from-gemfile h))))))
-        :else h))
+  (if-lang? :Ruby h
+            (fn [h] (update-in h [:libs] #(set (concat %1 %2))
+                         (map (partial str "ruby/")
+                              (concat (extract-libs-from-gemspec h)
+                                      (extract-libs-from-gemfile h)))))))
 
 (defn load-project-clj [user repo]
   (String. (or (:content (repos/contents user repo "project.clj" opts)) "")))
 
 (defn parse-project-clj [content]
-  (cond (empty? content)
-        {}
-        :else
-        (apply assoc {} (drop 3 (read-string content)))))
+  (cond (empty? content) {}
+        :else (apply assoc {} (drop 3 (read-string content)))))
 
 (defn extract-clojure-libs [h]
-  (cond (uses-lang? :Clojure h)
-        (assoc h :libs
-               (concat (:libs h)
-                       (map #(str "clojure/" (first %))
-                            (:dependencies (parse-project-clj (load-project-clj
-                                                               (:user h)
-                                                               (:repo h)))))))
-        :else h))
+  (if-lang? :Clojure h
+            (fn [h] (update-in h [:libs] #(set (concat %1 %2))
+                         (map #(str "clojure/" (first %))
+                              (:dependencies (parse-project-clj
+                                              (load-project-clj (:user h)
+                                                                (:repo h)))))))))
 
 (defn keep-useful-keys [h]
-  (select-keys h [:langs
+  (select-keys h [:id
+                  :langs
                   :user
                   :created_at
                   :updated_at
@@ -88,7 +84,7 @@
                   :libs]))
 
 (defn print-preprocess-result [h]
-  (println @counter (:full_name h) "\n"
+  (println @counter "id:" (:id h) (:full_name h) "\n"
            " langs : " (seq (:langs h)) "\n"
            " libs  : " (seq (:libs h)) "\n")
   (counter-inc)
@@ -96,6 +92,10 @@
 
 (defn add-empty-libs-set [h]
   (assoc h :libs #{}))
+
+(defn log [name h]
+  (println name "- h is:" h)
+  h)
 
 (defn preprocess-repo [h]
   (-> h
@@ -122,13 +122,13 @@
           [:created_at :updated_at :pushed_at])))
 
 (defn add-repo-to-db [h]
-  (println "  adding repo to db " h "\n")
-  (apply db/add-repo (concat [(str (:user h) "/" (:repo h))
-                              (:created_at h)
-                              (:pushed_at h)
-                              (:watchers_count h)
-                              (:forks_count h)]
-                             (:libs h)))
+  (db/add-repo (str (:user h) "/" (:repo h))
+               :created (:created_at h)
+               :updated (:pushed_at h)
+               :watchers (:watchers_count h)
+               :forks (:forks_count h)
+               :github-id (:id h)
+               :lib-names (:libs h))
   h)
 
 
@@ -153,18 +153,83 @@
       fetch-github-repo-data
       parse-dates
       keep-useful-keys
-      print-data
       add-repo-to-db
       add-libs-to-db))
 
 (defn repo-filter [h]
   (not-empty (:libs h)))
 
+(defn fetch-recursive [& {:keys [fetch proceed-with next-args args]}]
+  (let [f (fn f [f-args]
+            (let [results (apply fetch f-args)
+                  proceed (proceed-with results)]
+              (cond proceed (lazy-cat results (f (next-args f-args results)))
+                    :else (f f-args))))]
+    (f args)))
+
+(defn sleep-until [ts-seconds]
+  (let [now-seconds (Math/floor (/ (.getTime (java.util.Date.)) 1000))]
+    (cond (> ts-seconds now-seconds)
+          (do (println (- ts-seconds now-seconds) "seconds until rate limit resets")
+                                         (Thread/sleep 60000)
+                                         (recur ts-seconds)))))
+
+(defn rate-limit-remaining []
+  (get-in (tentacles.core/api-call :get "rate_limit" nil opts) [:rate :remaining]))
+
+(defn rate-limit-reset []
+  (get-in (tentacles.core/api-call :get "rate_limit" nil opts) [:rate :reset]))
+
+(defn handle-ratelimit
+  "check if either the last results were rate limited, or we've got less we might
+need to complete the next batch"
+  [results]
+  (cond (= (:status results) 403)
+        (do (println "rate limited!")
+            (sleep-until (rate-limit-reset))
+            false)
+        (< (rate-limit-remaining) 500)
+        (do (println "rate limit remaining less than 500")
+            (sleep-until (rate-limit-reset))
+            false)
+        :else true))
+
+(defn yaygh [& args]
+  (fetch-recursive :fetch (fn gh-fetch [since]
+                            (println "fetching repos since:" since)
+                            (repos/all-repos (assoc opts :since since)))
+                   :args args
+                   :next-args #(list (:id (last (butlast %2))))
+                   :proceed-with handle-ratelimit))
+
 (defn fetch-repos [n since]
   (counter-reset)
-  (->> (repos/all-repos (assoc opts :since since :all-pages true))
+  (->> (yaygh since)
+   ;(repos/all-repos (assoc opts :since since :all-pages true))
        (take n)
        (filter seq)
        (pmap preprocess-repo)
        (filter repo-filter)
        (pmap postprocess-repo)))
+
+
+(defn fib
+  ([] (fib 0 1))
+  ([a b] (lazy-seq (cons b (fib b (+ a b))))))
+
+(defn fetch-results [offset]
+  (if (= (rand-int 3) 1) {:rate-limited true}
+      (map #(assoc {} :id (+ offset %)) (range 20))))
+
+(defn oij [blah & {:keys [name] :as m}]
+  (list blah m))
+
+(defn yay2 [& args]
+  (fetch-recursive :fetch fetch-results
+                   :initial-args args
+                   :next-args #(list (+ (first %1) (count %2)))
+                   :proceed-with (fn [results]
+                                   (cond (:rate-limited results)
+                                         (do (println "sleeping...")
+                                             (Thread/sleep 500))
+                                     :else true))))

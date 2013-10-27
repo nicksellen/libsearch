@@ -37,6 +37,13 @@
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id [:db.part/db]
+  :db/ident :repo/github-id
+  :db/valueType :db.type/long
+  :db/cardinality :db.cardinality/one
+  :db/doc "github repo id"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id [:db.part/db]
   :db/ident :repo/created-at
   :db/valueType :db.type/instant
   :db/cardinality :db.cardinality/one
@@ -81,42 +88,29 @@
 
 (defn add-lib [name & repo-names]
   (comment println (str "adding lib [" name "] and repos " repo-names))
-  (let [repos (map
-               #(into {} [[:repo/fullname %] [:db/id (d/tempid :db.part/user)]])
-               repo-names)]
-    @(d/transact conn (conj repos {
-                               :lib/name name,
-                               :lib/repo (map :db/id repos),
-                               :db/id (d/tempid :db.part/user)}))))
+  (let [repos (map #(into {} [[:repo/fullname %]
+                              [:db/id (d/tempid :db.part/user)]])
+                   repo-names)]
+    @(d/transact conn (conj repos {:lib/name name,
+                                   :lib/repo (map :db/id repos),
+                                   :db/id (d/tempid :db.part/user)}))))
 
-(defn add-repo [name created updated watchers forks & lib-names]
-  (comment println
+(defn add-repo [name & {:keys [github-id created updated watchers forks lib-names] :as m}]
+   (comment println
    (str "adding repo [" name "] with libs " lib-names " and created/updated " created "/" updated ))
   (let [repo-id (d/tempid :db.part/user)
-        libs (map
-              #(into {} [[:lib/name %]
-                         [:lib/repo repo-id]
-                         [:db/id (d/tempid :db.part/user)]])
-              lib-names)]
-    @(d/transact conn (conj
-                       libs
-                       {:repo/fullname name
-                        :repo/created-at created
-                        :repo/updated-at updated
-                        :repo/watchers-count watchers
-                        :repo/forks-count forks
-                        :db/id repo-id}))))
-
-(defn list-repos []
-  (map first (d/q '[:find ?n :where [_ :repo/fullname ?n]] (db conn))))
-
-(defn list-libs []
-  (map first (d/q '[:find ?n :where [_ :lib/name ?n]] (db conn))))
-
-(defn query []
-  (map #(into {} (seq (d/entity (db conn) (first %))))
-       (q '[:find ?n :where [?n :lib/name]]
-          (db conn))))
+        libs (map #(into {} [[:lib/name %]
+                             [:lib/repo repo-id]
+                             [:db/id (d/tempid :db.part/user)]])
+                  lib-names)]
+    @(d/transact conn (conj libs
+                            {:repo/fullname name
+                             :repo/github-id github-id
+                             :repo/created-at created
+                             :repo/updated-at updated
+                             :repo/watchers-count watchers
+                             :repo/forks-count forks
+                             :db/id repo-id}))))
 
 (defn p [v]
   ;(prn v)
@@ -160,7 +154,8 @@
           (d/q (p (update-in query [:where] concat (filter seq (apply concat rules))))
                (db conn))))
 
-(defn query-libs-with-repos [& rules]
+(defn query-libs-with-repos [rules]
+  ; TODO 'count' should probably be 'sum'
   (query-with-rules {:find ['(count ?repowatchers)
                             '?libname
                             '(distinct ?reponame)]
@@ -171,7 +166,7 @@
                              ['?repo :repo/watchers-count '?repowatchers]]}
                     rules))
 
-(defn query-repos-with-libs [& rules]
+(defn query-repos-with-libs [rules]
   (query-with-rules {:find ['?repowatchers
                             '?reponame
                             '(distinct ?libname)
@@ -189,20 +184,12 @@
                              ['?repo :repo/updated-at '?updated]]}
                     rules))
 
-(defn query-repos-with-libs-off []
-  (take 20 (d/q '[:find ?reponame ?libname
-           :where
-           [?repo-id :repo/fullname ?reponame]
-           [?lib-id :lib/repo ?repo-id]
-           [?lib-id :lib/name ?libname]]
-         (db conn))))
-
 (defn libs [count offset & rules]
-  (->> (apply query-libs-with-repos rules)
+  (->> (query-libs-with-repos rules)
        (with-count-and-offset count offset)
        (mapize-results [:rank :lib :repos])))
 
 (defn repos [count offset & rules]
-  (->> (apply query-repos-with-libs rules)
+  (->> (query-repos-with-libs rules)
        (with-count-and-offset count offset)
        (mapize-results [:rank :repo :libs :watchers :forks :created :updated])))
