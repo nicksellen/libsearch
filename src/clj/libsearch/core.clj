@@ -98,13 +98,17 @@
   h)
 
 (defn preprocess-repo [h]
-  (-> h
-      extract-name-and-repo
-      add-empty-libs-set
-      extract-langs
-      extract-ruby-libs
-      extract-clojure-libs
-      print-preprocess-result))
+  (try
+    (-> h
+        extract-name-and-repo
+        add-empty-libs-set
+        extract-langs
+        extract-ruby-libs
+        extract-clojure-libs
+        print-preprocess-result)
+    (catch Throwable t
+      (println "exxception caught whilst processing" (:full_name h))
+      (.printStackTrace t) h)))
 
 (defn fetch-github-repo-data [h]
   (merge h (select-keys
@@ -147,14 +151,18 @@
   h)
 
 (defn postprocess-repo [h]
-  (println "  selected!\n")
-  (-> h
-      add-some-defaults
-      fetch-github-repo-data
-      parse-dates
-      keep-useful-keys
-      add-repo-to-db
-      add-libs-to-db))
+  (println (:full_name h) "selected!\n")
+  (try
+    (-> h
+        add-some-defaults
+        fetch-github-repo-data
+        parse-dates
+        keep-useful-keys
+        add-repo-to-db
+        add-libs-to-db)
+    (catch Throwable t
+      (println "exception caught whilst processing" (str (:user h) "/" (:repo h)))
+      (.printStackTrace t) h)))
 
 (defn repo-filter [h]
   (not-empty (:libs h)))
