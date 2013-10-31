@@ -120,10 +120,12 @@
   [[(list '.startsWith '?libname (str val "/"))]])
 
 (defn watchers [f val]
-  [['?repo :repo/watchers-count '?watchers] [(list f '?watchers val)]])
+  [['?repo :repo/watchers-count '?watchers]
+   [(list f '?watchers val)]])
 
 (defn forks [f val]
-  [['?repo :repo/forks-count '?forks] [(list f '?forks val)]])
+  [['?repo :repo/forks-count '?forks]
+   [(list f '?forks val)]])
 
 ;; these date ones aren't very good yet... I want to be able to
 ;; pass the comparison fn into it and I don't know how to reference
