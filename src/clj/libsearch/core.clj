@@ -26,7 +26,8 @@
   (assoc h :langs (set (keys (repos/languages (:user h) (:repo h) opts)))))
 
 (defn if-lang? [lang h f]
-  (cond (contains? (:langs h) lang) (f h) :else h))
+  (cond (contains? (:langs h) lang) (f h)
+        :else h))
 
 (defn uses-lang? [lang h]
   (contains? (:langs h) lang))
@@ -34,20 +35,20 @@
 (defn extract-libs-from-gemfile [h]
   (mapcat rest
    (re-seq #"gem\ ['\"]([a-zA-Z0-9_-]+)['\"]"
-           (String. (or (:content
-                           (repos/contents
-                            (:user h)
-                            (:repo h)
-                            "Gemfile" opts)) "")))))
+           (String. (or (:content (repos/contents (:user h)
+                                                  (:repo h)
+                                                  "Gemfile"
+                                                  opts))
+                        "")))))
 
 (defn extract-libs-from-gemspec [h]
   (mapcat rest
    (re-seq #"_dependency[\ \(]['\"]([a-zA-Z0-9_-]+)['\"]"
-           (String. (or (:content
-                           (repos/contents
-                            (:user h)
-                            (:repo h)
-                            (str (:repo h) ".gemspec") opts)) "")))))
+           (String. (or (:content (repos/contents (:user h)
+                                                  (:repo h)
+                                                  (str (:repo h) ".gemspec")
+                                                  opts))
+                        "")))))
 
 (defn extract-ruby-libs [h]
   (if-lang? :Ruby h
@@ -57,7 +58,8 @@
                                       (extract-libs-from-gemfile h)))))))
 
 (defn load-project-clj [user repo]
-  (String. (or (:content (repos/contents user repo "project.clj" opts)) "")))
+  (String. (or (:content (repos/contents user repo "project.clj" opts))
+               "")))
 
 (defn parse-project-clj [content]
   (cond (empty? content) {}
@@ -111,19 +113,17 @@
       (.printStackTrace t) h)))
 
 (defn fetch-github-repo-data [h]
-  (merge h (select-keys
-            (repos/specific-repo (:user h) (:repo h) opts)
-            [:created_at
-             :updated_at
-             :pushed_at
-             :watchers_count
-             :forks_count])))
+  (merge h (select-keys (repos/specific-repo (:user h) (:repo h) opts)
+                        [:created_at
+                         :updated_at
+                         :pushed_at
+                         :watchers_count
+                         :forks_count])))
 
 (defn parse-dates [h]
   (apply assoc h
-         (mapcat
-          #(list % (coerce/to-date (h %)))
-          [:created_at :updated_at :pushed_at])))
+         (mapcat #(list % (coerce/to-date (h %)))
+                 [:created_at :updated_at :pushed_at])))
 
 (defn add-repo-to-db [h]
   (db/add-repo (str (:user h) "/" (:repo h))
@@ -179,14 +179,16 @@
   (let [now-seconds (Math/floor (/ (.getTime (java.util.Date.)) 1000))]
     (cond (> ts-seconds now-seconds)
           (do (println (- ts-seconds now-seconds) "seconds until rate limit resets")
-                                         (Thread/sleep 60000)
-                                         (recur ts-seconds)))))
+              (Thread/sleep 60000)
+              (recur ts-seconds)))))
 
 (defn rate-limit-remaining []
-  (get-in (tentacles.core/api-call :get "rate_limit" nil opts) [:rate :remaining]))
+  (get-in (tentacles.core/api-call :get "rate_limit" nil opts)
+          [:rate :remaining]))
 
 (defn rate-limit-reset []
-  (get-in (tentacles.core/api-call :get "rate_limit" nil opts) [:rate :reset]))
+  (get-in (tentacles.core/api-call :get "rate_limit" nil opts)
+          [:rate :reset]))
 
 (defn handle-ratelimit
   "check if either the last results were rate limited, or we've got less we might
@@ -226,8 +228,10 @@ need to complete the next batch"
   ([a b] (lazy-seq (cons b (fib b (+ a b))))))
 
 (defn fetch-results [offset]
-  (if (= (rand-int 3) 1) {:rate-limited true}
-      (map #(assoc {} :id (+ offset %)) (range 20))))
+  (if (= (rand-int 3) 1)
+    {:rate-limited true}
+    (map #(assoc {} :id (+ offset %))
+         (range 20))))
 
 (defn oij [blah & {:keys [name] :as m}]
   (list blah m))

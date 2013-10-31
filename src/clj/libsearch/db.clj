@@ -151,8 +151,9 @@
 
 (defn query-with-rules [query rules]
   (sort #(> (first %1) (first %2))
-          (d/q (p (update-in query [:where] concat (filter seq (apply concat rules))))
-               (db conn))))
+        (d/q (p (update-in query [:where] concat
+                           (filter seq (apply concat rules))))
+             (db conn))))
 
 (defn query-libs-with-repos [rules]
   ; TODO 'count' should probably be 'sum'
