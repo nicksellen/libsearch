@@ -120,29 +120,36 @@
   [[(list '.startsWith '?libname (str val "/"))]])
 
 (defn watchers [f val]
-  [['?repo :repo/watchers-count '?watchers] [(list f '?watchers val)]])
+  [['?repo :repo/watchers-count '?watchers]
+   [(list f '?watchers val)]])
 
 (defn forks [f val]
-  [['?repo :repo/forks-count '?forks] [(list f '?forks val)]])
+  [['?repo :repo/forks-count '?forks]
+   [(list f '?forks val)]])
 
 ;; these date ones aren't very good yet... I want to be able to
 ;; pass the comparison fn into it and I don't know how to reference
 ;; properly inside my inner function
 
 (defn created [f val]
-  [['?repo :repo/created-at '?created] [(list f '?created val)]])
+  [['?repo :repo/created-at '?created]
+   [(list f '?created val)]])
 
 (defn created> [val]
-  (created #(> (coerce/to-long %1) %2) (coerce/to-long val)))
+  (created #(> (coerce/to-long %1) %2)
+           (coerce/to-long val)))
 
 (defn created< [val]
-  (created #(< (coerce/to-long %1) %2) (coerce/to-long val)))
+  (created #(< (coerce/to-long %1) %2)
+           (coerce/to-long val)))
 
 (defn updated [f val]
-  [['?repo :repo/updated-at '?updated] [(list f '?updated val)]])
+  [['?repo :repo/updated-at '?updated]
+   [(list f '?updated val)]])
 
 (defn mapize-results [ks results]
-  (map #(apply assoc {} (interleave ks (take (count ks) %))) results))
+  (map #(apply assoc {} (interleave ks (take (count ks) %)))
+       results))
 
 (defn with-count-and-offset [count offset results]
   (->> results
@@ -151,8 +158,9 @@
 
 (defn query-with-rules [query rules]
   (sort #(> (first %1) (first %2))
-          (d/q (p (update-in query [:where] concat (filter seq (apply concat rules))))
-               (db conn))))
+        (d/q (p (update-in query [:where] concat
+                           (filter seq (apply concat rules))))
+             (db conn))))
 
 (defn query-libs-with-repos [rules]
   ; TODO 'count' should probably be 'sum'

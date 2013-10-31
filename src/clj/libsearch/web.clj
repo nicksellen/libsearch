@@ -14,16 +14,17 @@
    :body (json/write-str data)})
 
 (defn process-libs [libs]
-  (map #(apply assoc % (interleave [:lang :name] (clojure.string/split (:lib %) #"\/" 2))) libs))
+  (map #(apply assoc % (interleave [:lang :name] (clojure.string/split (:lib %) #"\/" 2)))
+       libs))
 
 (defn process-repos [repos]
   (map #(assoc %
           :created (str (:created %))
           :updated (str (:updated %))
           :libs (map (fn [name] (apply assoc
-                                      {}
-                                      (interleave [:lang :name]
-                                                  (clojure.string/split name #"\/" 2))))
+                                       {}
+                                       (interleave [:lang :name]
+                                                   (clojure.string/split name #"\/" 2))))
                      (:libs %)))
        repos))
 
@@ -43,4 +44,5 @@
       (resources/wrap-resource "public")
       (wrap-reload '(libsearch.web))))
 
-(defn run [port] (run-jetty handler {:port port, :join? false}))
+(defn run [port]
+  (run-jetty handler {:port port, :join? false}))
