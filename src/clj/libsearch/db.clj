@@ -133,16 +133,20 @@
   [['?repo :repo/created-at '?created] [(list f '?created val)]])
 
 (defn created> [val]
-  (created #(> (coerce/to-long %1) %2) (coerce/to-long val)))
+  (created #(> (coerce/to-long %1) %2)
+           (coerce/to-long val)))
 
 (defn created< [val]
-  (created #(< (coerce/to-long %1) %2) (coerce/to-long val)))
+  (created #(< (coerce/to-long %1) %2)
+           (coerce/to-long val)))
 
 (defn updated [f val]
-  [['?repo :repo/updated-at '?updated] [(list f '?updated val)]])
+  [['?repo :repo/updated-at '?updated]
+   [(list f '?updated val)]])
 
 (defn mapize-results [ks results]
-  (map #(apply assoc {} (interleave ks (take (count ks) %))) results))
+  (map #(apply assoc {} (interleave ks (take (count ks) %)))
+       results))
 
 (defn with-count-and-offset [count offset results]
   (->> results
