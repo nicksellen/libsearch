@@ -130,7 +130,8 @@
 ;; properly inside my inner function
 
 (defn created [f val]
-  [['?repo :repo/created-at '?created] [(list f '?created val)]])
+  [['?repo :repo/created-at '?created]
+   [(list f '?created val)]])
 
 (defn created> [val]
   (created #(> (coerce/to-long %1) %2)
